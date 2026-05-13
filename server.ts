@@ -3,9 +3,10 @@ import path from "path";
 import fs from "fs/promises";
 import { createServer as createViteServer } from "vite";
 import cors from "cors";
+import { XMLParser, XMLBuilder } from "fast-xml-parser";
 
 const PORT = 3000;
-const DATA_FILE = path.join(process.cwd(), "matrix-data.json");
+const DATA_FILE = path.join(process.cwd(), "matrix-data.xml");
 
 const INITIAL_TASKS_TITLES = [
   'صوتك مسموع',
@@ -25,6 +26,16 @@ const INITIAL_TASKS_TITLES = [
   'الإسكان',
   'الحج'
 ];
+
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  parseTagValue: true,
+});
+
+const builder = new XMLBuilder({
+  format: true,
+  ignoreAttributes: false,
+});
 
 async function startServer() {
   const app = express();
@@ -49,11 +60,16 @@ async function startServer() {
     }));
 
     const initialData = {
-      tasks: initialTasks,
-      appTitle: 'مصفوفة مراحل العمليات',
-      appDescription: 'Enterprise Status Tracker - تتبع حالة المشاريع بدقة'
+      MatrixData: {
+        appTitle: 'مصفوفة مراحل العمليات',
+        appDescription: 'Enterprise Status Tracker - تتبع حالة المشاريع بدقة',
+        tasks: {
+          task: initialTasks
+        }
+      }
     };
-    await fs.writeFile(DATA_FILE, JSON.stringify(initialData, null, 2));
+    const xmlContent = builder.build(initialData);
+    await fs.writeFile(DATA_FILE, xmlContent);
   }
 
   // --- API Routes ---
@@ -61,9 +77,22 @@ async function startServer() {
   // Get current state
   app.get("/api/matrix", async (req, res) => {
     try {
-      const data = await fs.readFile(DATA_FILE, "utf-8");
-      res.json(JSON.parse(data));
+      const xmlData = await fs.readFile(DATA_FILE, "utf-8");
+      const jsonObj = parser.parse(xmlData);
+      
+      // Ensure tasks is an array even if there is only 1 or 0 tasks
+      let tasks = jsonObj.MatrixData.tasks?.task || [];
+      if (!Array.isArray(tasks)) {
+        tasks = [tasks];
+      }
+
+      res.json({
+        appTitle: jsonObj.MatrixData.appTitle,
+        appDescription: jsonObj.MatrixData.appDescription,
+        tasks: tasks
+      });
     } catch (error) {
+      console.error("Read Error:", error);
       res.status(500).json({ error: "Failed to read data" });
     }
   });
@@ -72,10 +101,20 @@ async function startServer() {
   app.post("/api/matrix", async (req, res) => {
     try {
       const { tasks, appTitle, appDescription } = req.body;
-      const dataToSave = { tasks, appTitle, appDescription };
-      await fs.writeFile(DATA_FILE, JSON.stringify(dataToSave, null, 2));
+      const dataToSave = {
+        MatrixData: {
+          appTitle,
+          appDescription,
+          tasks: {
+            task: tasks
+          }
+        }
+      };
+      const xmlContent = builder.build(dataToSave);
+      await fs.writeFile(DATA_FILE, xmlContent);
       res.json({ status: "success" });
     } catch (error) {
+      console.error("Write Error:", error);
       res.status(500).json({ error: "Failed to save data" });
     }
   });
