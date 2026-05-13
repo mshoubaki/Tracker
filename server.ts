@@ -7,6 +7,25 @@ import cors from "cors";
 const PORT = 3000;
 const DATA_FILE = path.join(process.cwd(), "matrix-data.json");
 
+const INITIAL_TASKS_TITLES = [
+  'صوتك مسموع',
+  'الموردين',
+  'المكتبة الرقمية',
+  'إدامة',
+  'طلبات الدعم',
+  'إنصاف',
+  'تقييم الكفاءات',
+  'التحقق من الشهادات',
+  'معادلة الشهادات',
+  'سنابل',
+  'تكافل',
+  'المسح الميداني',
+  'عبور',
+  'الإيفاد الخارجي',
+  'الإسكان',
+  'الحج'
+];
+
 async function startServer() {
   const app = express();
   app.use(express.json());
@@ -16,8 +35,21 @@ async function startServer() {
   try {
     await fs.access(DATA_FILE);
   } catch {
+    const initialTasks = INITIAL_TASKS_TITLES.map((title, idx) => ({
+      id: Math.random().toString(36).substring(7),
+      title,
+      phases: { 
+        BRD: 'not-started',
+        UX: 'not-started',
+        API: 'not-started', 
+        Dev: 'not-started', 
+        QC: 'not-started' 
+      },
+      createdAt: Date.now() - idx * 1000,
+    }));
+
     const initialData = {
-      tasks: [],
+      tasks: initialTasks,
       appTitle: 'مصفوفة مراحل العمليات',
       appDescription: 'Enterprise Status Tracker - تتبع حالة المشاريع بدقة'
     };
