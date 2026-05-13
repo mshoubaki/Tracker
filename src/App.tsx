@@ -86,45 +86,56 @@ export default function App() {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [appTitle, setAppTitle] = useState('مصفوفة مراحل العمليات');
   const [appDescription, setAppDescription] = useState('Enterprise Status Tracker - تتبع حالة المشاريع بدقة');
 
-  // Load from local storage
-  useEffect(() => {
-    const savedTasks = localStorage.getItem('phase_tracker_v4');
-    if (savedTasks) {
-      setTasks(JSON.parse(savedTasks));
-    } else {
-      const initial = INITIAL_TASKS_TITLES.map((title, idx) => ({
-        id: crypto.randomUUID(),
-        title,
-        phases: { 
-          BRD: 'not-started',
-          UX: 'not-started',
-          API: 'not-started', 
-          Dev: 'not-started', 
-          QC: 'not-started' 
-        },
-        createdAt: Date.now() - idx * 1000,
-      }));
-      setTasks(initial);
-      localStorage.setItem('phase_tracker_v4', JSON.stringify(initial));
+  // Fetch from Server
+  const fetchData = async () => {
+    try {
+      const res = await fetch('/api/matrix');
+      const data = await res.json();
+      setTasks(data.tasks);
+      setAppTitle(data.appTitle);
+      setAppDescription(data.appDescription);
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
     }
+  };
 
-    const savedTitle = localStorage.getItem('phase_tracker_title');
-    const savedDesc = localStorage.getItem('phase_tracker_desc');
-    if (savedTitle) setAppTitle(savedTitle);
-    if (savedDesc) setAppDescription(savedDesc);
+  // Initial load
+  useEffect(() => {
+    const init = async () => {
+      await fetchData();
+      setIsInitialized(true);
+    };
+    init();
 
-    setIsInitialized(true);
+    // Poll for changes every 5 seconds for multi-user sync
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
   }, []);
 
-  // Save to local storage
+  // Sync to Server
   useEffect(() => {
     if (isInitialized) {
-      localStorage.setItem('phase_tracker_v4', JSON.stringify(tasks));
-      localStorage.setItem('phase_tracker_title', appTitle);
-      localStorage.setItem('phase_tracker_desc', appDescription);
+      const sync = async () => {
+        setIsSaving(true);
+        try {
+          await fetch('/api/matrix', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tasks, appTitle, appDescription })
+          });
+        } catch (error) {
+          console.error('Failed to sync data:', error);
+        } finally {
+          setIsSaving(false);
+        }
+      };
+      
+      const timeout = setTimeout(sync, 500); // Debounce sync
+      return () => clearTimeout(timeout);
     }
   }, [tasks, appTitle, appDescription, isInitialized]);
 
@@ -332,8 +343,8 @@ export default function App() {
         <div className="flex gap-8">
           <span className="flex items-center gap-2 text-indigo-400"><div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" /> النظام نشط</span>
           <span className="flex items-center gap-2 text-emerald-400">
-            <div className="w-1 h-1 rounded-full bg-emerald-400" />
-            تم الحفظ تلقائياً
+            <div className={`w-1 h-1 rounded-full bg-emerald-400 ${isSaving ? 'animate-ping' : ''}`} />
+            {isSaving ? 'جاري الحفظ...' : 'تم الحفظ في الخادم'}
           </span>
           <span>السجلات: {tasks.length}</span>
         </div>
@@ -390,14 +401,15 @@ export default function App() {
           </button>
           <button 
             onClick={() => {
-              if(confirm('هل أنت متأكد من مسح جميع البيانات؟')) {
-                localStorage.removeItem('phase_tracker_v4');
-                window.location.reload();
+              if(confirm('هل أنت متأكد من مسح جميع البيانات على الخادم؟')) {
+                setTasks([]);
+                setAppTitle('مصفوفة مراحل العمليات');
+                setAppDescription('Enterprise Status Tracker');
               }
             }}
             className="hover:text-red-400 transition-colors"
           >
-            إعادة ضبط المصفوفة
+            إعادة ضبط المصفوفة (الخادم)
           </button>
           <span>Operational Registry v3.0</span>
         </div>
