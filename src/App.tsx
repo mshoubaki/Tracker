@@ -153,6 +153,12 @@ export default function App() {
     ));
   };
 
+  const updateTaskTitle = (taskId: string, newTitle: string) => {
+    setTasks(tasks.map(t => 
+      t.id === taskId ? { ...t, title: newTitle } : t
+    ));
+  };
+
   const deleteTask = (id: string) => {
     if (confirm('Delete this task?')) {
       setTasks(tasks.filter(t => t.id !== id));
@@ -257,9 +263,15 @@ export default function App() {
                           className="group hover:bg-slate-50/80 transition-colors"
                         >
                           <td className="matrix-cell pr-8 sticky right-0 z-10 bg-white group-hover:bg-slate-50 transition-colors border-l border-slate-200 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">
-                            <div className="flex items-center gap-3">
-                              <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 group-hover:scale-150 transition-transform" />
-                              <span className="font-bold text-slate-700 truncate" dir="auto">{task.title}</span>
+                            <div className="flex items-center gap-3 w-full">
+                              <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 group-hover:scale-150 transition-transform shrink-0" />
+                              <input 
+                                value={task.title}
+                                onChange={(e) => updateTaskTitle(task.id, e.target.value)}
+                                className="font-bold text-slate-700 bg-transparent hover:bg-slate-100/50 focus:bg-white focus:ring-1 focus:ring-indigo-100 rounded px-1 -mx-1 outline-none transition-all w-full truncate"
+                                dir="auto"
+                                placeholder="اسم المهمة..."
+                              />
                             </div>
                           </td>
                           <td className="matrix-cell text-center">
@@ -319,6 +331,10 @@ export default function App() {
       <footer className="bg-slate-900 text-white/50 px-8 py-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.2em] border-t border-white/5">
         <div className="flex gap-8">
           <span className="flex items-center gap-2 text-indigo-400"><div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" /> النظام نشط</span>
+          <span className="flex items-center gap-2 text-emerald-400">
+            <div className="w-1 h-1 rounded-full bg-emerald-400" />
+            تم الحفظ تلقائياً
+          </span>
           <span>السجلات: {tasks.length}</span>
         </div>
         <div className="flex gap-4">
