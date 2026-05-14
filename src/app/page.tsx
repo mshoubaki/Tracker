@@ -1,10 +1,7 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+'use client';
 
 import { useState, useEffect, FormEvent } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Plus, 
   Trash2, 
@@ -13,7 +10,7 @@ import {
   Circle,
   BarChart3, 
   Layers, 
-  Layout, 
+  Layout as LayoutIcon, 
   Code2, 
   ShieldCheck, 
   FileText,
@@ -36,39 +33,12 @@ interface Task {
 
 const PHASES: Phase[] = ['BRD', 'UX', 'API', 'Dev', 'QC'];
 
-const INITIAL_TASKS_TITLES = [
-  'صوتك مسموع',
-  'الموردين',
-  'المكتبة الرقمية',
-  'إدامة',
-  'طلبات الدعم',
-  'إنصاف',
-  'تقييم الكفاءات',
-  'التحقق من الشهادات',
-  'معادلة الشهادات',
-  'سنابل',
-  'تكافل',
-  'المسح الميداني',
-  'عبور',
-  'الإيفاد الخارجي',
-  'الإسكان',
-  'الحج'
-];
-
 // --- Helpers ---
 
 const getNextStatus = (current: Status): Status => {
   if (current === 'not-started') return 'in-progress';
   if (current === 'in-progress') return 'completed';
   return 'not-started';
-};
-
-const getStatusColor = (status: Status) => {
-  switch (status) {
-    case 'not-started': return 'bg-slate-100 text-slate-400 border-slate-200';
-    case 'in-progress': return 'bg-amber-50 text-amber-600 border-amber-200';
-    case 'completed': return 'bg-emerald-50 text-emerald-600 border-emerald-200';
-  }
 };
 
 const getStatusIcon = (status: Status, size = 16) => {
@@ -79,55 +49,13 @@ const getStatusIcon = (status: Status, size = 16) => {
   }
 };
 
-// --- Components ---
-
-export default function App() {
+export default function MatrixPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
-<<<<<<< HEAD
-  const [appTitle, setAppTitle] = useState('مصفوفة مراحل العمليات');
-  const [appDescription, setAppDescription] = useState('Enterprise Status Tracker - تتبع حالة المشاريع بدقة');
-
-  // Load from local storage
-  useEffect(() => {
-    const savedTasks = localStorage.getItem('phase_tracker_v4');
-    if (savedTasks) {
-      setTasks(JSON.parse(savedTasks));
-    } else {
-      const initial = INITIAL_TASKS_TITLES.map((title, idx) => ({
-        id: crypto.randomUUID(),
-        title,
-        phases: { 
-          BRD: 'not-started',
-          UX: 'not-started',
-          API: 'not-started', 
-          Dev: 'not-started', 
-          QC: 'not-started' 
-        },
-        createdAt: Date.now() - idx * 1000,
-      }));
-      setTasks(initial);
-      localStorage.setItem('phase_tracker_v4', JSON.stringify(initial));
-    }
-
-    const savedTitle = localStorage.getItem('phase_tracker_title');
-    const savedDesc = localStorage.getItem('phase_tracker_desc');
-    if (savedTitle) setAppTitle(savedTitle);
-    if (savedDesc) setAppDescription(savedDesc);
-
-    setIsInitialized(true);
-  }, []);
-
-  // Save to local storage
-  useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('phase_tracker_v4', JSON.stringify(tasks));
-      localStorage.setItem('phase_tracker_title', appTitle);
-      localStorage.setItem('phase_tracker_desc', appDescription);
-=======
   const [isSaving, setIsSaving] = useState(false);
+  const [dbStatus, setDbStatus] = useState<{ status: string; message: string }>({ status: 'checking', message: 'Checking connection...' });
   const [appTitle, setAppTitle] = useState('مصفوفة مراحل العمليات');
   const [appDescription, setAppDescription] = useState('Enterprise Status Tracker - تتبع حالة المشاريع بدقة');
 
@@ -136,9 +64,23 @@ export default function App() {
     try {
       const res = await fetch('/api/matrix');
       const data = await res.json();
-      setTasks(data.tasks);
-      setAppTitle(data.appTitle);
-      setAppDescription(data.appDescription);
+      if (data.error) {
+        // If API returns error, we mark it
+        setDbStatus({ status: 'error', message: data.error });
+      } else {
+        setDbStatus({ status: 'success', message: 'Supabase Connected' });
+      }
+      
+      if (data.tasks) {
+        // Convert dates if needed
+        const mappedTasks = data.tasks.map((t: any) => ({
+          ...t,
+          createdAt: new Date(t.created_at || t.createdAt).getTime()
+        }));
+        setTasks(mappedTasks);
+      }
+      if (data.appTitle) setAppTitle(data.appTitle);
+      if (data.appDescription) setAppDescription(data.appDescription);
     } catch (error) {
       console.error('Failed to fetch data:', error);
     }
@@ -147,6 +89,15 @@ export default function App() {
   // Initial load
   useEffect(() => {
     const init = async () => {
+      // Check connection first
+      try {
+        const checkRes = await fetch('/api/db-check');
+        const checkData = await checkRes.json();
+        setDbStatus({ status: checkData.status, message: checkData.message });
+      } catch (err) {
+        setDbStatus({ status: 'disconnected', message: 'Failed to reach backend' });
+      }
+
       await fetchData();
       setIsInitialized(true);
     };
@@ -163,21 +114,27 @@ export default function App() {
       const sync = async () => {
         setIsSaving(true);
         try {
-          await fetch('/api/matrix', {
+          const res = await fetch('/api/matrix', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ tasks, appTitle, appDescription })
           });
+          const data = await res.json();
+          if (data.error) {
+             setDbStatus({ status: 'error', message: `Sync Error: ${data.error}` });
+          } else {
+             setDbStatus({ status: 'success', message: 'Supabase Connected' });
+          }
         } catch (error) {
           console.error('Failed to sync data:', error);
+          setDbStatus({ status: 'error', message: 'Sync Failed' });
         } finally {
           setIsSaving(false);
         }
       };
       
-      const timeout = setTimeout(sync, 500); // Debounce sync
+      const timeout = setTimeout(sync, 1000); // Debounce sync
       return () => clearTimeout(timeout);
->>>>>>> 6ce0782f2c9e2b1183433b082995a4ecb4d1fb30
     }
   }, [tasks, appTitle, appDescription, isInitialized]);
 
@@ -186,7 +143,7 @@ export default function App() {
     if (!newTaskTitle.trim()) return;
     
     const newTask: Task = {
-      id: crypto.randomUUID(),
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(7),
       title: newTaskTitle,
       phases: { 
         BRD: 'not-started', UX: 'not-started', API: 'not-started', Dev: 'not-started', QC: 'not-started' 
@@ -206,18 +163,17 @@ export default function App() {
     ));
   };
 
-<<<<<<< HEAD
-=======
   const updateTaskTitle = (taskId: string, newTitle: string) => {
     setTasks(tasks.map(t => 
       t.id === taskId ? { ...t, title: newTitle } : t
     ));
   };
 
->>>>>>> 6ce0782f2c9e2b1183433b082995a4ecb4d1fb30
-  const deleteTask = (id: string) => {
+  const deleteTask = async (id: string) => {
     if (confirm('Delete this task?')) {
       setTasks(tasks.filter(t => t.id !== id));
+      // Proactively delete from server
+      await fetch(`/api/matrix?id=${id}`, { method: 'DELETE' });
     }
   };
 
@@ -319,11 +275,6 @@ export default function App() {
                           className="group hover:bg-slate-50/80 transition-colors"
                         >
                           <td className="matrix-cell pr-8 sticky right-0 z-10 bg-white group-hover:bg-slate-50 transition-colors border-l border-slate-200 shadow-[-4px_0_10px_rgba(0,0,0,0.02)]">
-<<<<<<< HEAD
-                            <div className="flex items-center gap-3">
-                              <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 group-hover:scale-150 transition-transform" />
-                              <span className="font-bold text-slate-700 truncate" dir="auto">{task.title}</span>
-=======
                             <div className="flex items-center gap-3 w-full">
                               <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 group-hover:scale-150 transition-transform shrink-0" />
                               <input 
@@ -333,7 +284,6 @@ export default function App() {
                                 dir="auto"
                                 placeholder="اسم المهمة..."
                               />
->>>>>>> 6ce0782f2c9e2b1183433b082995a4ecb4d1fb30
                             </div>
                           </td>
                           <td className="matrix-cell text-center">
@@ -392,90 +342,50 @@ export default function App() {
       {/* Footer System Bar */}
       <footer className="bg-slate-900 text-white/50 px-8 py-3 flex items-center justify-between text-[10px] font-mono uppercase tracking-[0.2em] border-t border-white/5">
         <div className="flex gap-8">
-          <span className="flex items-center gap-2 text-indigo-400"><div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" /> النظام نشط</span>
-<<<<<<< HEAD
-=======
+          <span className="flex items-center gap-2">
+            <div className={`w-1.5 h-1.5 rounded-full ${
+              dbStatus.status === 'success' ? 'bg-emerald-400 animate-pulse' : 
+              dbStatus.status === 'checking' ? 'bg-amber-400 animate-pulse' : 
+              'bg-red-500'
+            }`} /> 
+            {dbStatus.message}
+          </span>
           <span className="flex items-center gap-2 text-emerald-400">
             <div className={`w-1 h-1 rounded-full bg-emerald-400 ${isSaving ? 'animate-ping' : ''}`} />
-            {isSaving ? 'جاري الحفظ...' : 'تم الحفظ في الخادم'}
+            {isSaving ? 'جاري الحفظ...' : 'تم الحفظ في Supabase'}
           </span>
->>>>>>> 6ce0782f2c9e2b1183433b082995a4ecb4d1fb30
           <span>السجلات: {tasks.length}</span>
         </div>
         <div className="flex gap-4">
           <button 
             onClick={() => {
-              const data = {
-                tasks,
-                appTitle,
-                appDescription,
-                version: '3.0'
-              };
+              const data = { tasks, appTitle, appDescription };
               const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `matrix-data-${new Date().toISOString().split('T')[0]}.json`;
+              a.download = `matrix-data.json`;
               a.click();
               URL.revokeObjectURL(url);
             }}
             className="hover:text-indigo-400 transition-colors"
           >
-            تصدير البيانات (JSON)
+            تصدير البيانات
           </button>
           <button 
-            onClick={() => {
-              const input = document.createElement('input');
-              input.type = 'file';
-              input.accept = 'application/json';
-              input.onchange = (e) => {
-                const file = (e.target as HTMLInputElement).files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (re) => {
-                  try {
-                    const data = JSON.parse(re.target?.result as string);
-                    if (data.tasks) {
-                      setTasks(data.tasks);
-                      if (data.appTitle) setAppTitle(data.appTitle);
-                      if (data.appDescription) setAppDescription(data.appDescription);
-                      alert('تم استيراد البيانات بنجاح');
-                    }
-                  } catch (err) {
-                    alert('خطأ في ملف البيانات');
-                  }
-                };
-                reader.readAsText(file);
-              };
-              input.click();
-            }}
-            className="hover:text-indigo-400 transition-colors"
-          >
-            استيراد البيانات
-          </button>
-          <button 
-            onClick={() => {
-<<<<<<< HEAD
-              if(confirm('هل أنت متأكد من مسح جميع البيانات؟')) {
-                localStorage.removeItem('phase_tracker_v4');
-                window.location.reload();
-=======
+            onClick={async () => {
               if(confirm('هل أنت متأكد من مسح جميع البيانات على الخادم؟')) {
                 setTasks([]);
                 setAppTitle('مصفوفة مراحل العمليات');
                 setAppDescription('Enterprise Status Tracker');
->>>>>>> 6ce0782f2c9e2b1183433b082995a4ecb4d1fb30
+                await fetch('/api/matrix', { method: 'DELETE' });
               }
             }}
             className="hover:text-red-400 transition-colors"
           >
-<<<<<<< HEAD
-            إعادة ضبط المصفوفة
-=======
-            إعادة ضبط المصفوفة (الخادم)
->>>>>>> 6ce0782f2c9e2b1183433b082995a4ecb4d1fb30
+            إعادة ضبط المصفوفة (Supabase)
           </button>
-          <span>Operational Registry v3.0</span>
+          <span>Operational Registry v4.0 (Next.js + Supabase)</span>
         </div>
       </footer>
     </div>
@@ -485,7 +395,7 @@ export default function App() {
 function PhaseIcon({ phase, className }: { phase: Phase, className?: string }) {
   switch (phase) {
     case 'BRD': return <FileText size={16} className={className} />;
-    case 'UX': return <Layout size={16} className={className} />;
+    case 'UX': return <LayoutIcon size={16} className={className} />;
     case 'API': return <Code2 size={16} className={className} />;
     case 'Dev': return <Layers size={16} className={className} />;
     case 'QC': return <ShieldCheck size={16} className={className} />;

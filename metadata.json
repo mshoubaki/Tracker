@@ -1,6 +1,6 @@
 {
   "name": "Phase Tracker Pro",
-  "description": "A streamlined project management dashboard for tracking task progress across BRD, UX, API, Dev, and QC phases.",
+  "description": "A robust Next.js project management dashboard powered by Cloud SQL (PostgreSQL) for high-performance multi-user tracking and data persistence.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }
